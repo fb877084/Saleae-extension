@@ -203,8 +203,11 @@ def _pick_addr_endianness(b0: int, b1: int) -> Tuple[int, bool]:
 
 
 def _is_valid_rsp_byte(b: int) -> bool:
+    # For alignment, we do NOT treat 0xFF as a valid response opcode.
+    # Many captures have long 0xFF runs (pull-ups/dummy bytes), and accepting
+    # 0xFF here causes false "NO_RESPONSE" classifications.
     if b == RSP_NO_RESPONSE:
-        return True
+        return False
     nib = b & 0x0F
     return nib in (RSP_ACCEPT, RSP_DEFER, RSP_NON_FATAL, RSP_FATAL, RSP_WAIT_STATE)
 
@@ -228,12 +231,16 @@ def _find_rsp_start(mosi: bytes, miso: bytes) -> Optional[int]:
 
     Prefer fixed request length (where known). Otherwise, search for a plausible
     response opcode in the later part of the transfer.
+
+    NOTE: On real captures it's common to see long stretches of 0xFF (pull-ups /
+    dummy bytes / TAR effects). We therefore avoid declaring NO_RESPONSE unless
+    the *entire* MISO stream is 0xFF.
     """
     if not miso or not mosi:
         return None
 
     # If the whole MISO stream is pulled-up, treat as NO_RESPONSE.
-    if all(b == 0xFF for b in miso[1:]):
+    if all(b == 0xFF for b in miso):
         return None
 
     req_len = _guess_req_len(mosi)
@@ -243,7 +250,7 @@ def _find_rsp_start(mosi: bytes, miso: bytes) -> Optional[int]:
 
     # Search for WAIT_STATE(s) followed by a valid response opcode.
     # Require space for trailing STS(2)+CRC(1) to reduce false positives.
-    for i in range(start_i, min(len(miso), len(mosi))):
+    for i in range(start_i, len(miso)):
         if len(miso) - i < 4:
             break
         j = i
@@ -255,7 +262,7 @@ def _find_rsp_start(mosi: bytes, miso: bytes) -> Optional[int]:
             return i
 
     # Fallback: first non-0xFF byte.
-    for i in range(1, min(len(miso), len(mosi))):
+    for i in range(1, len(miso)):
         if miso[i] != 0xFF:
             return i
     return None

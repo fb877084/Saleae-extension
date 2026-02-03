@@ -88,6 +88,15 @@ class TestDecoder(unittest.TestCase):
         self.assertIn("VW_IRQ", s)
         self.assertIn("irq=5", s)
 
+    def test_rsp_start_not_missed_after_ff_run(self):
+        # Real capture pattern: MISO begins with a run of 0xFF then transitions
+        # to 0xC3... We should not label this as NO_RESPONSE.
+        mosi = bytes.fromhex('44 09 10 00 AE 00 00 00 00 00 00 00 00 25')
+        miso = bytes.fromhex('FF FF FF FF FF C3 C3 C3 C3 C3 C2 03 C0 A7')
+        dec = decode_espi_best_effort(mosi, miso)
+        self.assertNotEqual(dec.rsp_name, 'NO_RESPONSE')
+        self.assertEqual(dec.rsp_name, 'FATAL_ERROR')
+
 
 if __name__ == "__main__":
     unittest.main()
