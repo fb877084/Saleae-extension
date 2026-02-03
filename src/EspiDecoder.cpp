@@ -41,8 +41,20 @@ EspiDecodedTransaction EspiDecoder::Decode( const std::vector<uint8_t>& mosi, co
 	};
 
 	out.ok = true;
+	// Minimal field breakdown (best-effort; may differ by cycle type)
+	uint8_t hdr0 = ( mosi.size() > 1 ) ? mosi[ 1 ] : 0;
+	uint8_t hdr1 = ( mosi.size() > 2 ) ? mosi[ 2 ] : 0;
+	uint8_t hdr2 = ( mosi.size() > 3 ) ? mosi[ 3 ] : 0;
+	uint8_t hdr3 = ( mosi.size() > 4 ) ? mosi[ 4 ] : 0;
+	uint16_t len16 = (uint16_t)( ( (uint16_t)hdr2 << 8 ) | hdr3 );
+
 	out.summary = std::string( "eSPI(cmd=" ) + HexByte( mosi[ 0 ] ) +
 		", hdr=[" + hb( 1 ) + " " + hb( 2 ) + " " + hb( 3 ) + " " + hb( 4 ) + "]" +
+		", hdr0=" + HexByte( hdr0 ) +
+		", hdr1=" + HexByte( hdr1 ) +
+		", hdr2=" + HexByte( hdr2 ) +
+		", hdr3=" + HexByte( hdr3 ) +
+		", len16=" + std::to_string( len16 ) +
 		", mosi_len=" + std::to_string( mosi.size() ) +
 		", miso_len=" + std::to_string( miso.size() ) +
 		", wait_ff=" + std::to_string( rsp_off ) +
