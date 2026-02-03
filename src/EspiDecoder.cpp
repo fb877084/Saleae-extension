@@ -28,11 +28,25 @@ EspiDecodedTransaction EspiDecoder::Decode( const std::vector<uint8_t>& mosi, co
 
 	std::string rsp0 = ( rsp_off < miso.size() ) ? HexByte( miso[ rsp_off ] ) : "(none)";
 
+	// Header preview (until we implement full eSPI parsing)
+	auto hb = [&]( size_t i ) -> std::string {
+		if( i < mosi.size() )
+			return HexByte( mosi[ i ] );
+		return "--";
+	};
+	auto rb = [&]( size_t i ) -> std::string {
+		if( rsp_off + i < miso.size() )
+			return HexByte( miso[ rsp_off + i ] );
+		return "--";
+	};
+
 	out.ok = true;
 	out.summary = std::string( "eSPI(cmd=" ) + HexByte( mosi[ 0 ] ) +
+		", hdr=[" + hb( 1 ) + " " + hb( 2 ) + " " + hb( 3 ) + " " + hb( 4 ) + "]" +
 		", mosi_len=" + std::to_string( mosi.size() ) +
 		", miso_len=" + std::to_string( miso.size() ) +
 		", wait_ff=" + std::to_string( rsp_off ) +
+		", rsp=[" + rb( 0 ) + " " + rb( 1 ) + " " + rb( 2 ) + " " + rb( 3 ) + "]" +
 		", rsp0=" + rsp0 +
 		")";
 	return out;
