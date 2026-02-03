@@ -4,6 +4,10 @@
 #include <Analyzer.h>
 #include "SpiAnalyzerResults.h"
 #include "SpiSimulationDataGenerator.h"
+#include "EspiDecoder.h"
+
+#include <vector>
+#include <cstdint>
 
 class SpiAnalyzerSettings;
 class SpiAnalyzer : public Analyzer2
@@ -28,6 +32,9 @@ class SpiAnalyzer : public Analyzer2
     bool WouldAdvancingTheClockToggleEnable( bool add_disable_frame, U64* disable_frame );
     void GetWord();
 
+    void StartTransaction( U64 start_sample );
+    void FinalizeTransaction( U64 end_sample );
+
 #pragma warning( push )
 #pragma warning(                                                                                                                           \
     disable : 4251 ) // warning C4251: 'SerialAnalyzer::<...>' : class <...> needs to have dll-interface to be used by clients of class
@@ -47,6 +54,13 @@ class SpiAnalyzer : public Analyzer2
     std::vector<U64> mArrowLocations;
     DataBuilder mMosiResult;
     DataBuilder mMisoResult;
+
+    // eSPI decoding (layered on top of SPI byte stream)
+    EspiDecoder mEspiDecoder;
+    bool mInTransaction = false;
+    U64 mTransactionStartSample = 0;
+    std::vector<uint8_t> mTransactionMosi;
+    std::vector<uint8_t> mTransactionMiso;
 
 
 #pragma warning( pop )

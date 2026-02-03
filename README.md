@@ -1,6 +1,9 @@
-# Saleae Serial Peripheral Interface (SPI) Analyzer
+# Saleae eSPI Analyzer (based on Saleae SPI Analyzer)
 
-Saleae Serial Peripheral Interface (SPI) Analyzer
+This repository starts from Saleae's official **SPI Protocol Analyzer (PA)** and will layer **eSPI decoding** on top of the decoded SPI bytes.
+
+- Base: SPI analyzer (official)
+- Goal: Add eSPI transaction-level semantics (TAR / WAIT_STATE / RSP / STS / CRC + channel-specific packet decoding)
 
 ## Getting Started
 
