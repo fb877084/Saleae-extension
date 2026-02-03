@@ -1,0 +1,51 @@
+name: prebuilt-windows
+
+on:
+  push:
+    branches:
+      - chore/prebuilt-windows-analyzer
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-commit:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure
+        run: |
+          cmake -S . -B build -A x64 -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: |
+          cmake --build build --config Release
+
+      - name: Collect artifact
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path prebuilt/windows-x86_64 | Out-Null
+
+          $dll = Get-ChildItem -Recurse -Path build -Filter *.dll | Where-Object { $_.Name -match 'spi_analyzer' } | Select-Object -First 1
+          if (-not $dll) { throw "spi analyzer dll not found" }
+
+          Copy-Item $dll.FullName prebuilt/windows-x86_64/spi_analyzer.dll -Force
+
+      - name: Commit prebuilt dll
+        shell: bash
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+
+          git add prebuilt/windows-x86_64/spi_analyzer.dll
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          git commit -m "Add prebuilt Windows analyzer binary (Release) [skip ci]"
+          git push
