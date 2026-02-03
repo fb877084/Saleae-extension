@@ -20,9 +20,20 @@ EspiDecodedTransaction EspiDecoder::Decode( const std::vector<uint8_t>& mosi, co
 		return out;
 	}
 
-	// Placeholder: we will implement proper eSPI decoding on top of the official SPI analyzer.
-	// For now, just show opcode and lengths so the analyzer can be validated end-to-end.
+	// Stage 2: WAIT-state alignment (best-effort)
+	// Many captures show long 0xFF runs on MISO before the response becomes valid.
+	size_t rsp_off = 0;
+	while( rsp_off < miso.size() && miso[ rsp_off ] == 0xFF )
+		rsp_off++;
+
+	std::string rsp0 = ( rsp_off < miso.size() ) ? HexByte( miso[ rsp_off ] ) : "(none)";
+
 	out.ok = true;
-	out.summary = std::string( "eSPI(opcode=" ) + HexByte( mosi[0] ) + ", mosi_len=" + std::to_string( mosi.size() ) + ", miso_len=" + std::to_string( miso.size() ) + ")";
+	out.summary = std::string( "eSPI(cmd=" ) + HexByte( mosi[ 0 ] ) +
+		", mosi_len=" + std::to_string( mosi.size() ) +
+		", miso_len=" + std::to_string( miso.size() ) +
+		", wait_ff=" + std::to_string( rsp_off ) +
+		", rsp0=" + rsp0 +
+		")";
 	return out;
 }
