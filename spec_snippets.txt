@@ -1,0 +1,640 @@
+
+
+===== PAGE 24 =====
+
+ 
+24                                                               Document Number: 841685, Revision: 1.6 
+eSPI targets must support both types of Alert mechanism. The method to 
+determine which Alert mechanism to use for each of the eSPI targets is 
+implementation specific. 
+eSPI is defined to use packet-based split transaction protocol. On the transmit 
+side, the packets are formed in the Transaction Layer based on the transaction 
+to be sent. The Link Layer extends the packet with a CRC byte. 
+Similarly, on the receive side, the CRC is checked at the receiving Link Layer 
+when CRC checking is enabled. Once the packet passes the CRC check, the 
+packet is sent to Transaction Layer where it is decoded and acted upon. 
+3.2 Command Phase 
+The Command phase is used by the eSPI controller to initiate a transaction to 
+the target or in response to an Alert event by the target. It consists of a CMD, 
+an optional header (HDR), optional DATA and a CRC. 
+The CMD field consists of Command Opcode. 
+Figure 13: Command Opcode 
+ 
+The Command Opcode is used to indicate channel specific commands and to 
+communicate link management events. 
+Channels specific commands communicated over the bus include Command Put 
+and Command Get for the respective channels. 
+Link management events include GET_STATUS, GET_CONFIGURATION and 
+SET_CONFIGURATION. 
+The Command Opcode is 8-bits wide. 
+If the target receives a packet with an invalid Command Opcode which is not 
+defined by this specification, the target must not respond to the transaction. 
+The transaction will be terminated with the default response (NO_RESPONSE) 
+on the bus.  
+ 
+ 
+ 
+Command Opcode[7:0]
+CMD
+
+
+===== PAGE 28 =====
+
+ 
+28                                                               Document Number: 841685, Revision: 1.6 
+3.3 Turn-Around (TAR) 
+After the last bit of the Command Phase has been sent out on the data lines, 
+the data lines enter the Turn-Around window. The eSPI controller is required to 
+drive all the data lines to logic ‘1’ for the first clock of the Turn-Around window 
+and tri-state the data lines thereafter. The number of clocks for the Turn-
+Around window is a fixed 2 serial clocks independent of the eSPI I/O Mode 
+(single, dual or quad I/O). The target may insert WAIT_STATE response code 
+after the TAR window for any eSPI transactions if additional time is needed for 
+the target to sample the command and prepare the response.  
+The eSPI target must not drive I/O[n:0] until the Response phase in all the 
+eSPI I/O mode (single, dual, quad I/O). In single I/O mode particularly, the 
+target must not drive I/O[1] (CITO, also known as MISO) until the Response 
+phase. It must drive the Response phase on the bus immediately upon the 
+expiry of the Turn-Around time as shown in the next diagram.  
+Optionally, the target is allowed to start turning on its driver on the bus half a 
+clock earlier at the end of the Turn-Around window (at the rising edge of the 
+second clock) in preparation for driving the response code at the subsequent 
+clock falling edge as required by the eSPI protocol.  
+During the Turn-Around window, the data lines will be pulled high by the weak 
+pull-up. 
+Figure 14: Turn-Around Time (TAR = 2 clock) 
+   
+ 
+ 
+CLK
+Chip Select#
+IO[0] C4 C0 CR
+4
+CR
+0
+   
+         
+
+
+===== PAGE 29 =====
+
+ 
+Document Number: 841685, Revision: 1.6  29 
+3.4 Response Phase 
+The Response phase is driven by the eSPI target in response to command 
+initiated by an eSPI controller. It consists of a RSP opcode, an optional header 
+(HDR), optional data, a STATUS and a CRC. 
+The RSP opcode is an 8-bit field consists of a Response Code and a Response 
+Modifier.  
+Figure 15: Response Field 
+  
+3.4.1 Response 
+The Response Code indicates whether the request is successful, deferred, 
+responded with error or wait state. 
+The Response Modifier is a 2-bit field defined for the GET_STATUS with an 
+ACCEPT response only. For all other responses, it must always have the value 
+of “00” except for NO_RESPONSE where it is “11”.  
+The Response Modifier field indicates whether a peripheral (channel 0) 
+completion, a virtual wire (channel 1) packet or a flash access (channel 3) 
+completion is appended to the GET_STATUS response phase. The flash access 
+(channel 3) completion is only applicable when target attached flash sharing is 
+supported and in operation.  
+The Response Modifier is by default disabled. It is enabled through 
+SET_CONFIGURATION by setting the Response Modifier Enable bit to ‘1’ in the 
+General Capabilities and Configurations register. Refer to Section 6.2.1.3 for 
+the register bit description. 
+The Reserved (RSV) field of the RSP opcode must be driven to all 0’s when the 
+target drives the response phase. It is reserved for future use by the 
+specification. For backward compatibility, the Reserved (RSV) field must be 
+ignored by the controller. 
+NO_RESPONSE is the default when the response phase is not driven by any 
+target. The eSPI controller may terminate the transaction by deasserting Chip 
+Select# at any point when this is detected. 
+ 
+Response Opcode[7:0]
+Response 
+Modifier RSV Response Code
+RSP
+7 6 5 4 3 2 1 0Bit
+
+
+===== PAGE 46 =====
+
+ 
+46                                                               Document Number: 841685, Revision: 1.6 
+4 Transaction Layer 
+4.1 Cycle Types and Packet Format 
+The following diagram shows a general Enhanced Serial Peripheral Interface 
+(eSPI) packet format. The description of the respective fields within the packet 
+is described in the subsequent sections. 
+Figure 33: General eSPI Packet Format 
+ 
+4.1.1 Cycle Types 
+The summary of cycle types supported over the eSPI interface is shown in the 
+table below. The Least-Significant-Bit (LSB) of the encodings distinguishes 
+between a cycle with data and a cycle without data. 
+The direction of cycle type supported is specified in the table as “Up” or 
+“Down”. “Up” refers to the direction from eSPI target to eSPI controller and 
+“Down” refers to the direction from eSPI controller to eSPI target. 
+7 6 45 3 2 1 0
+Address [31:24]
+Address [23:16]
+Byte 0
+Byte 1
+Byte 2
+Cycle Type
+Length[11:8]
+Length[7:0]
+Tag
+Byte 3
+Address [15:8]
+Address [7:0]
+Byte 4
+Byte 5
+Byte 6
+Data Byte 0
+Data Byte 1
+:
+:
+:
+Data Byte n
+Byte 7
+Byte n+7
+:
+:
+:
+Header
+Data
+Memory Write 32 Requests
+
+
+===== PAGE 47 =====
+
+ 
+Document Number: 841685, Revision: 1.6  47 
+Table 5: Cycle Types 
+Cycle Type Encodings3 
+[7:0] 
+Direction Command 
+Type 
+Channel 
+Type 
+Description 
+eSPI Peripheral Channel 
+Memory Read 
+32 
+00000000 Up/Down Non-Posted eSPI 
+Peripheral 
+Channel 
+32 bit addressing Memory 
+Read Request. 
+LPC Memory Read and LPC 
+Bus Master Memory Read 
+requests are mapped to 
+this cycle type. 
+Refer to Figure 36 for the 
+packet format.  
+Memory Read 
+64 
+00000010 Up/Down Non-Posted eSPI 
+Peripheral 
+Channel 
+64 bit addressing Memory 
+Read Request. 
+Support of upstream 
+Memory Read 64 is 
+mandatory for eSPI targets 
+that are bus mastering 
+capable. 
+Refer to Figure 36 for the 
+packet format. 
+Memory Write 
+32 
+00000001 Up/Down Posted eSPI 
+Peripheral 
+Channel 
+32 bit addressing Memory 
+Write Request. 
+LPC Memory Write and LPC 
+Bus Master Memory Write 
+requests are mapped to 
+this cycle type. 
+Refer to Figure 34 for the 
+packet format. 
+Memory Write 
+64 
+00000011 Up/Down Posted eSPI 
+Peripheral 
+Channel 
+64 bit addressing Memory 
+Write Request. 
+Support of upstream 
+Memory Write 64 is 
+mandatory for eSPI targets 
+that are bus mastering 
+capable.  
+Refer to Figure 34 for the 
+packet format. 
+Message 0001r2r1r00 Up/Down Posted eSPI 
+Peripheral 
+Channel 
+Message Request. 
+Refer to Figure 38 for the 
+packet format. 
+Message with 
+Data 
+0001r2r1r01 Up/Down Posted eSPI 
+Peripheral 
+Channel 
+Message Request with data 
+payload. 
+Refer to Figure 38 for the 
+packet format. 
+Successful 
+Completion 
+Without Data 
+00000110 Up Completion eSPI 
+Peripheral 
+Channel 
+Successful Completion 
+Without Data. 
+Corresponds to I/O Write. 
+Refer to Figure 39 for the 
+packet format. 
+
+
+===== PAGE 50 =====
+
+ 
+50                                                               Document Number: 841685, Revision: 1.6 
+4.1.2 Tag 
+The Tag field is allowed to be non-unique for multiple outstanding non-posted 
+requests on the same Channel that require completion.  
+Refer to Section 4.4 for more details about Tag and its association with the 
+ordering of completions. 
+The 4-bit Tag field allows up to 16 unique non-posted requests to be 
+outstanding at any one time which have no ordering requirement among each 
+other. However, the number of outstanding non-posted requests required to be 
+supported by eSPI controller or target is implementation specific as it is a 
+function of performance target outside the scope of the specification. 
+For posted requests which do not require completion, the usage of Tag field is 
+implementation specific and beyond the scope of the specification. 
+4.1.3 Length 
+The length field indicates the request size or data payload specified in Bytes. 
+The length field is 1-based.  A value of all zeros indicates 4 KB of length.  
+For memory read and Flash Read, the length field specifies the data payload 
+size requested. 
+For memory write, Flash write, OOB message with data and Completion with 
+Data, the length field specifies the actual amount of data returned in the 
+packet. 
+For Completion without Data or Un-Successful Completion, the length field 
+must be driven to zeros by initiator. The receiver must ignore the length field. 
+For Short I/O and Short Memory, there is no length field defined as the length 
+of the transaction is embedded in the command opcode itself which supports 1, 
+2, or 4 bytes access. Short command does not support 3 bytes access. 
+For Flash Erase length field definition, refer to the Controller Attached Flash 
+Sharing (4.2.4.1), and Target Attached Flash Sharing (4.2.4.2) section for 
+detail. 
+For Memory Write, data payload size must not exceed the naturally aligned 
+address boundary of the corresponding Maximum Payload Size. 
+For Flash Write and OOB message with data, data payload size must not 
+exceed the Maximum Payload Size of the respective channel with no address 
+alignment requirement. The data payload of the OOB message affected by the 
+Maximum Payload Size is the actual payload of the protocol embedded in the 
+message itself. Refer to Section 4.2.3 for the OOB message payload. 
+Read requests size initiated on the eSPI Peripheral Channel must not exceed 
+the naturally aligned address boundary of the corresponding Maximum Read 
+Request Size in its Channel Capability and Configuration register. For Flash 
+Access Channel, read requests size must not exceed the corresponding 
+Maximum Read Request Size with no address alignment requirement. 
+
+
+===== PAGE 57 =====
+
+ 
+Document Number: 841685, Revision: 1.6  57 
+Table 7: LTR Message Field Description 
+Message Field Description 
+RQ Requirement (RQ):  A ‘0’ indicates that eSPI target has no service 
+requirement. When this bit is a ‘1’, the remaining fields are valid to indicate 
+latency tolerance requirement for the eSPI target. 
+LS[2:0] Latency Scale (LS[2:0]):  This is the multiplier to the Latency Value 
+(LV[9:0]) field to yield an absolute time value for the latency tolerance. 
+ 
+LS[2:0] Description 
+000 Value times 1 ns 
+001 Value times 32 ns 
+010 Value times 1,024 ns 
+011 Value times 32,768 ns 
+100 Value times 1,048,576 ns 
+101 Value times 33,554,432 ns 
+110 - 111 Reserved 
+ 
+LV[9:0] Latency Value (LV[9:0]): Along with the Latency Scale (LS[2:0]) field, this 
+specifies the service latency that tolerable by the eSPI target. 
+4.2.2 Virtual Wires Channel 
+The Virtual Wire channel is used to communicate the state of Sideband pins or 
+GPIO tunneled through eSPI as in-band messages. Serial IRQ interrupts are 
+communicated through this channel as in-band messages. 
+The Command phase consists of a Command Opcode, Virtual Wire Packet and a 
+CRC. 
+The Virtual Wire Packet begins with the Virtual Wire Count as the header byte 
+where the count indicates the number of Virtual Wire groups communicated by 
+the packet. It is then followed by one or more Virtual Wire groups. Each of the 
+Virtual Wire group consists of 2 bytes, namely a Virtual Wire Index and a 
+Virtual Wire Data. Multiple Virtual Wire groups up to 64 groups are allowed to 
+be sent in the same packet. 
+The definition of the Virtual Wire Count is as follow: 
+Bits Description 
+7:6 Reserved 
+5:0 Count: The 6-bit count field allows up to 64 Virtual Wire groups to 
+be communicated in the same packet.  This is a 0-based count. 
+The number of Virtual Wire groups in a single Virtual Wire packet must not 
+exceed the Operating Maximum Virtual Wire Count configured in the Channel 1 
+Capability and Configuration register. This applies to any Virtual Wire packet 
+initiated by eSPI controller or eSPI target. eSPI target must advertise the 
+
+
+===== PAGE 72 =====
+
+ 
+72                                                               Document Number: 841685, Revision: 1.6 
+Figure 44: Edge-triggered Interrupt through Virtual Wire  
+  
+4.2.2.5 General-Purpose I/O Expander 
+The specification allows the eSPI controller to claim the General-Purpose I/O 
+(GPIO) pins physically resided on the eSPI target side as part of its own virtual 
+I/O pins. 
+If the Virtual GPIO is configured as an output pin, the eSPI controller tunnels 
+the state of the Virtual GPIO pin through in-band messaging and the eSPI 
+target, upon receiving the message, reflects the state on the GPIO pin 
+physically located on the target side. 
+If the Virtual GPIO is configured as an input pin, the eSPI target samples the 
+state of the physical GPIO pin and then tunnels the state of the GPIO pin 
+through in-band messaging on any pin state transition. 
+All the GPIO pins sharing the same index number must be configured to the 
+same direction. They can either be configured as all inputs or all outputs, but 
+not a combination of inputs and outputs. 
+Similarly, a group of Virtual GPIOs sharing the same index will share the same 
+reset. The reset is programmable to be reset by either eSPI Reset# or Platform 
+Reset. 
+The GPIO software interface on the eSPI controller and eSPI target is 
+implementation specific. The software is responsible to set up the configuration 
+for the GPIO pins on both sides appropriately and in the consistent manner. 
+The detail of the GPIO Configuration Registers is implementation specific. 
+The mapping of the Virtual GPIO pin to the physical GPIO pin on the eSPI 
+target side is implementation specific and outside the scope of the 
+specification. 
+4.2.3 OOB (Tunneled SMBus) Message Channel 
+The SMBus packets can be tunneled through eSPI as Out-Of-Band(OOB) 
+messages. The whole SMBus packet is embedded inside the eSPI OOB message 
+as data.  
+CLK
+Chip Select#
+Data[n:0] RSP CRCSTSGET_
+VWIRE
+VW 
+Count
+0x01
+VW 
+Index
+0 or 1
+VW 
+Data
+VW 
+Index
+0 or 1
+VW 
+DataCRC
+IRQ Line = ‘X’
+ Level = ‘1’
+IRQ Line = ’X'
+Level = ‘0’
+Edge-triggered interrupt represented by Interrupt [X] signal at the Receiver
+Interrupt [X]
+Pulse width is receiver 
+specific such that the 
+edge event can be 
+recognized correctly
+
+
+===== PAGE 75 =====
+
+ 
+Document Number: 841685, Revision: 1.6  75 
+4.2.4 Run-time Flash Access Channel 
+The Flash Access channel provides a path allowing the flash components to be 
+shared run-time between chipset and the eSPI targets that require flash 
+accesses such as EC and BMC.  
+Once the Flash Controller in the chipset has completed the flash initialization, 
+the Flash Access channel is enabled on the eSPI target side. 
+The Flash Access channel uses the same packet format as the eSPI Peripheral 
+Channel transactions.  
+The Tag field is used to match the completion with the request. Flash access 
+requests with the same tag must be completed in order. 
+Figure 48: Flash Access Request Packet Format 
+ 
+Figure 49: Flash Access Completion Packet Format 
+ 
+ 
+7 6 45 3 2 1 0
+Address [31:24]
+Address [23:16]
+Byte 0
+Byte 1
+Byte 2
+Cycle Type
+Length[11:8]
+Length[7:0]
+Tag
+Byte 3
+Address [15:8]
+Address [7:0]
+Byte 4
+Byte 5
+Byte 6
+Data Byte 0
+Data Byte 1
+:
+:
+:
+Data Byte n
+Byte 7
+Byte n+7
+:
+:
+:
+7 6 45 3 2 1 0
+Address [31:24]
+Address [23:16]
+Byte 0
+Byte 1
+Byte 2
+Cycle Type
+Length[11:8]
+Length[7:0]
+Tag
+Byte 3
+Address [15:8]
+Address [7:0]
+Byte 4
+Byte 5
+Byte 6
+Header
+Data
+Header
+Flash Write
+Flash Read/Flash Erase
+7 6 45 3 2 1 0
+Byte 0
+Byte 1
+Byte 2
+Cycle Type
+Length[11:8]
+Length[7:0]
+Tag
+Byte 3 Data Byte 0
+Data Byte 1
+:
+:
+:
+Data Byte nByte n+3
+:
+:
+:
+Header
+Data
+7 6 45 3 2 1 0
+Byte 0
+Byte 1
+Byte 2
+Length[11:8]
+Length[7:0]
+Tag
+Cycle Type
+Flash Read Completion
+Flash Write/Erase Completion
+
+
+===== PAGE 86 =====
+
+ 
+86                                                               Document Number: 841685, Revision: 1.6 
+5 Link Layer 
+5.1 Single I/O, Dual I/O, and Quad I/O Modes 
+All controllers and targets must support Single I/O mode of operation. Support 
+for Dual I/O and Quad I/O mode of operation is advertised by the target 
+through the General Capabilities and Configurations register. Dual I/O and 
+Quad I/O mode can be independently support by a particular Enhanced Serial 
+Peripheral Interface (eSPI) target.  
+By default, coming out of eSPI Reset#, both controller and target operate in 
+Single I/O mode. The mode of operation can be changed by the controller 
+using the SET_CONFIGURATION command. 
+The SET_CONFIGURATION is completed with the current mode of operation. 
+The new mode of operation will only take effect at the deassertion edge of the 
+Chip Select#. 
+In Single I/O mode, I/O[1:0] pins are uni-directional. eSPI controller drives the 
+I/O[0] during command phase, and response from target is driven on the 
+I/O[1]. eSPI target is required to tri-state I/O[1] during command phase as 
+I/O[1] can be driven by eSPI controller such as when initiating an In-Band 
+Reset command. 
+In Dual I/O mode, I/O[1:0] pins become bi-directional to form the bi-
+directional data bus and all the command and response phases are transferred 
+over the two bi-directional pins at the same time, effectively doubling the 
+transfer rate of the Single I/O mode. 
+In Quad I/O mode, I/O[3:0] pins are bi-directional data bus and all the 
+command and response phases are transferred over the four bi-directional pins 
+at the same time, effectively doubling the transfer rate of the Dual I/O mode. 
+Each of the fields for an eSPI transaction is shifted out accordingly in the 
+defined order. For fields that contain multiple bytes, the order of the bytes 
+being shifted out on the eSPI bus is as follow: (LSB = Least Significant Byte, 
+MSB = Most Significant Byte) 
+• Header: 
+o Length:  From MSB (with Tag field) to LSB 
+o Address:  From MSB to LSB.  This applies to eSPI transactions with 
+address including GET_CONFIGURATION and SET_CONFIGURATION. 
+• Data: From LSB to MSB 
+• Status: From LSB to MSB 
+Each of the bytes is shifted from the most significant bit (bit[7]) to the least 
+significant bit (bit[0]). 
+An example of a controller initiated peripheral channel memory read is as 
+shown below. 
+
+
+===== PAGE 90 =====
+
+ 
+90                                                               Document Number: 841685, Revision: 1.6 
+5.2 Cyclic Redundancy Check (CRC) 
+CRC-8 is used to protect the eSPI transaction packets. The Command Phase 
+and Response Phase contain respective CRC byte. For Command Phase, the 
+CRC calculation includes all the bytes during the Command Phase such as the 
+Command Opcode, Header (if present) and Data (if present). For Response 
+Phase, the CRC calculation includes all the bytes during the Response Phase 
+such as the Response code (except WAIT_STATE Response Code which is not 
+included in the CRC calculation), Header (if present), Data (if present) and 
+Status. 
+The CRC value is calculated using the following rules: 
+• The polynomial is expressed as: x8 + x2 + x + 1. 
+• The polynomial used for the CRC calculation has a coefficient expressed as 
+“07h”. 
+• The seed value is “00h”. The CRC storage registers are reset to the initial 
+value of 00h prior to any CRC byte calculation. 
+• The CRC calculation starts with bit[7] of byte 0 and proceeds from bit[7] to 
+bit[0] of each byte.  
+CRC generation is mandatory for eSPI. However, CRC checking is default 
+disabled after eSPI reset# and it is enabled through SET_CONFIGURATION by 
+setting the CRC Checking Enable bit whereby upon the successful 
+SET_CONFIGURATION, CRC checking is enabled on both eSPI controller and 
+eSPI target at the deassertion edge of CS#. Both eSPI controller and eSPI 
+target must always be capable of supporting CRC checking as platform 
+requirements determine if CRC checking will be enabled for an eSPI interface. 
+When CRC checking is disabled, the CRC byte is ignored by the receiver. 
+Figure 59: CRC Polynomial Representation 
+  
+  
+Q
+Q
+SET
+CLR
+D
+Q
+Q
+SET
+CLR
+D
+Q
+Q
+SET
+CLR
+D
+Q
+Q
+SET
+CLR
+D
+Q
+Q
+SET
+CLR
+D
+Q
+Q
+SET
+CLR
+D
+Q
+Q
+SET
+CLR
+D
+Q
+Q
+SET
+CLR
+D
+Q0Q1Q2Q3Q4Q5Q6Q7
+Bit stream.
+Starts with bit[7] of byte 0 and
+proceeds from bit[7] to bit[0] of each byte
+CRC polynomial:  x8 + x2 + x + 1

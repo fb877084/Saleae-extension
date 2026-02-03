@@ -1,0 +1,2096 @@
+Table 7: LTR Message Field Description
+Message Field
+
+Description
+
+RQ
+
+Requirement (RQ): A ‘0’ indicates that eSPI target has no service
+requirement. When this bit is a ‘1’, the remaining fields are valid to indicate
+latency tolerance requirement for the eSPI target.
+
+LS[2:0]
+
+Latency Scale (LS[2:0]): This is the multiplier to the Latency Value
+(LV[9:0]) field to yield an absolute time value for the latency tolerance.
+LS[2:0]
+
+Description
+
+000
+
+Value times 1 ns
+
+001
+
+Value times 32 ns
+
+010
+
+Value times 1,024 ns
+
+011
+
+Value times 32,768 ns
+
+100
+
+Value times 1,048,576 ns
+
+101
+
+Value times 33,554,432 ns
+
+110 - 111
+LV[9:0]
+
+4.2.2
+
+Reserved
+
+Latency Value (LV[9:0]): Along with the Latency Scale (LS[2:0]) field, this
+specifies the service latency that tolerable by the eSPI target.
+
+Virtual Wires Channel
+The Virtual Wire channel is used to communicate the state of Sideband pins or
+GPIO tunneled through eSPI as in-band messages. Serial IRQ interrupts are
+communicated through this channel as in-band messages.
+The Command phase consists of a Command Opcode, Virtual Wire Packet and a
+CRC.
+The Virtual Wire Packet begins with the Virtual Wire Count as the header byte
+where the count indicates the number of Virtual Wire groups communicated by
+the packet. It is then followed by one or more Virtual Wire groups. Each of the
+Virtual Wire group consists of 2 bytes, namely a Virtual Wire Index and a
+Virtual Wire Data. Multiple Virtual Wire groups up to 64 groups are allowed to
+be sent in the same packet.
+The definition of the Virtual Wire Count is as follow:
+Bits
+
+Description
+
+7:6
+
+Reserved
+
+5:0
+
+Count: The 6-bit count field allows up to 64 Virtual Wire groups to
+be communicated in the same packet. This is a 0-based count.
+
+The number of Virtual Wire groups in a single Virtual Wire packet must not
+exceed the Operating Maximum Virtual Wire Count configured in the Channel 1
+Capability and Configuration register. This applies to any Virtual Wire packet
+initiated by eSPI controller or eSPI target. eSPI target must advertise the
+
+Document Number: 841685, Revision: 1.6
+
+57
+
+support of 8 or more Virtual Wire groups being communicated in a single
+Virtual Wire packet.
+The Virtual Wire Index points to one of the many pre-defined groups of Virtual
+Wires. The format of the Virtual Wire Data is specific to the corresponding
+Virtual Wire Index. It contains information specific to the Virtual Wire group
+that it is communicating.
+The unused virtual wire slots within a particular Virtual Wire Index would be
+made Reserved. The initiator must drive the Reserved field to ‘0’ and the
+receiver must ignore the Reserved field.
+Virtual Wire packets are not subjected to flow control. The receiver must
+always be ready to receive the Virtual Wire packets at any time, as long as the
+channel is enabled.
+The length of the Virtual Wire Packet is (1 + 2*n) bytes where n is the number
+of Virtual Wire groups in the packet.
+Virtual Wire should be given the highest priority over traffic from other
+channels to ensure that the latency is kept to a minimum.
+The diagram below shows the Virtual Wire packet format.
+Figure 41: Virtual Wire Packet Format
+
+PUT_
+VWIRE
+
+Virtual Wire
+Count
+
+Virtual
+Wire Index
+
+RSP
+
+CRC
+
+STS
+
+CRC
+
+Virtual Wire
+Count
+
+Virtual
+Wire Index
+
+Virtual Wire
+Data
+
+Target Initiated Virtual Wire Transfer
+
+The components on both sides of the bus must track the logical state of the
+individual Virtual Wires. When the logical state of the Virtual Wire changes, the
+new state must be communicated to the other component connected to the
+same bus using the appropriate Virtual Wire messages.
+Some of the Virtual Wires such as PME and Interrupt can be shared by multiple
+eSPI targets. The eSPI controller must track the logical state of the individual
+Virtual Wires independently for each of the eSPI targets and is responsible to
+aggregate the different sets of Virtual Wires.
+
+58
+
+Document Number: 841685, Revision: 1.6
+
+The messages from eSPI controller to target are unicast only, meaning they
+can only target one particular eSPI target.
+When PLTRST# message is received over the link, indicating platform reset,
+the individual Virtual Wires reset by Platform Reset should be initialized to the
+default value. To avoid behavior ambiguity, it is recommended that Virtual
+Wires reset by Platform Reset should not be sent together with PLTRST#
+Virtual Wire in a single Virtual Wire packet. In any case, PLTRST# takes priority
+and these Virtual Wires are reset regardless of their level sent in the packet.
+When virtual wires change state due to reset (either going into reset or exiting
+reset), a new message will not be sent to notify the other component of the
+state change as both sides would be looking at the same reset.
+If an un-supported Virtual Wire message is received, the receiver should drop
+the message silently.
+The Virtual Wires tunneled through eSPI will only take effect at the receiver
+when the Chip Select# is deasserted at the end of the transaction. The initiator
+can only assume the Virtual Wires are sent at the deassertion edge of the Chip
+Select# for the purpose of synchronizing the physical pin state change with the
+Virtual Wires communicated.
+Figure 42: Virtual Wires at the Receiver
+CLK
+
+Chip Select#
+
+Data[n:0]
+
+PUT_
+VWIRE
+
+VW
+Count
+0x01
+
+VW[x]_VALID = ’1'
+VW[x] = ‘1’
+
+VW
+Index
+(a)
+
+VW
+Data
+
+VW
+Index
+(b)
+
+VW
+Data
+
+CRC
+
+RSP
+
+STS
+
+CRC
+
+PUT_
+VWIRE
+
+VW
+Count
+0x01
+
+VW
+Index
+(C)
+
+VW
+Index
+(a)
+
+VW
+Data
+
+VW
+Data
+
+CRC
+
+RSP
+
+STS
+
+CRC
+
+VW[y]_VALID = ’1'
+VW[y] = ‘1’
+VW[z]_VALID = ’1'
+VW[z] = ‘1’
+
+Virtual Wire[x, y, z] represented by Signal[x, y, z] at the Receiver (Target)
+
+VW[x]_VALID = ’1'
+VW[x] = ‘0’
+
+Signal [x]
+
+Signal [y]
+
+Signal [z]
+
+CLK
+
+Chip Select#
+
+Data[n:0]
+
+GET_
+VWIRE
+
+CRC
+
+RSP
+
+VW[p]_VALID = ’1'
+VW[p] = ‘1’
+
+VW
+Count
+0x01
+
+VW
+Index
+(d)
+
+VW
+Data
+
+VW
+Index
+(e)
+
+VW
+Data
+
+VW[q]_VALID = ’1'
+VW[q] = ‘1’
+
+Virtual Wire[p, q, r] represented by Signal[p, q, r] at the Receiver (Controller)
+
+STS
+
+CRC
+
+GET_
+VWIRE
+
+CRC
+
+RSP
+
+VW[r]_VALID = ’1'
+VW[r] = ‘1’
+
+VW
+Count
+0x01
+
+VW
+Index
+(f)
+
+VW
+Data
+
+VW
+Index
+(d)
+
+VW
+Data
+
+STS
+
+CRC
+
+VW[p]_VALID = ’1'
+VW[p] = ‘0’
+
+Signal [p]
+
+Signal [q]
+
+Signal [r]
+
+Document Number: 841685, Revision: 1.6
+
+59
+
+4.2.2.1
+
+Virtual Wire Index
+The following table defines the Virtual Wire Index, the corresponding predefined Virtual Wire groups and the associated Virtual Wire Data formats.
+
+Table 8: Virtual Wire Index Definition
+Virtual Wire Index
+Start
+
+End
+
+Virtual Wire Group
+
+Virtual Wire Data Format
+7
+
+6
+
+5
+
+4
+
+L
+
+3
+
+2
+
+1
+
+0
+
+IRQ Line
+
+Bit
+
+Description
+
+7
+
+Interrupt Level:
+0b: Low
+1b: High
+
+0
+
+1
+
+Interrupt event
+
+6:0
+
+Interrupt Line: Specify the interrupt
+(IRQ) line to be sent to the interrupt
+controller.
+Index=0h: IRQ 0 – 127
+Index=1h: IRQ 128 – 255
+
+Interrupt event virtual wires are defined from
+target to controller only.
+Interrupt level high (‘1’) indicates interrupt
+assertion. Interrupt events virtual wires are
+active high.
+
+60
+
+Document Number: 841685, Revision: 1.6
+
+Virtual Wire Index
+Start
+
+End
+
+Virtual Wire Group
+
+Virtual Wire Data Format
+7
+
+6
+
+5
+
+4
+
+Valid
+
+3
+
+2
+
+1
+
+0
+
+Level
+
+Bit
+
+Description
+
+7:4
+
+Valid: This field indicates the validity
+of the 1-to-1 corresponding Level bits.
+0b: Not valid
+1b: Valid
+
+2
+
+7
+
+This bit functions as a “Mask” bit.
+When ‘0’, the corresponding virtual
+wire must retain its previous value and
+it must not be updated for this virtual
+wire packet.
+
+System Event
+3:0
+
+Level: Each of the bits in this field
+indicates the state of a virtual wire
+signal to be communicated.
+0b: Low
+1b: High
+
+Note: The Valid field is to handle the case where
+the Virtual Wire may be located in a shallower
+power well compared to another Virtual Wire in
+the same group and may not be valid at the time
+the Virtual Wire message is sent.
+8
+
+63
+
+Reserved
+
+64
+
+127
+
+Platform specific
+
+Document Number: 841685, Revision: 1.6
+
+Reserved.
+Platform specific
+
+61
+
+Virtual Wire Index
+Start
+
+End
+
+Virtual Wire Group
+
+Virtual Wire Data Format
+7
+
+6
+
+5
+
+4
+
+Valid
+
+3
+
+2
+
+1
+
+0
+
+Level
+
+Bit
+
+Description
+
+7:4
+
+Valid: This field indicates the validity
+of the 1-to-1 corresponding Level bits.
+0b: Not valid
+1b: Valid
+
+128
+
+255
+
+This bit functions as a “Mask” bit.
+When ‘0’, the corresponding virtual
+wire must retain its previous value and
+it must not be updated for this virtual
+wire packet.
+
+General Purpose I/O
+Expander
+3:0
+
+Level: Each of the bits in this field
+indicates the state of a virtual GPIO to
+be communicated.
+0b: Low
+1b: High
+
+Note: The Valid field is to handle the case where
+the Virtual Wire may be located in a shallower
+power well compared to another Virtual Wire in
+the same group and may not be valid at the time
+the Virtual Wire message is sent.
+
+4.2.2.2
+
+System Event Virtual Wires
+The eSPI specification defines the following system event Virtual Wires covering
+the platform independent standard sideband signals.
+Unless being specifically called out, all system events (Virtual Wire Index 2 to
+7) are level by default. These include ERROR FATAL and ERROR NON-FATAL
+virtual wires which are level-triggered. Any state change on a system event
+result in the new state being communicated with the corresponding Level (‘0’
+or ‘1’). The default reset state for the respective virtual wires is as described in
+the virtual wire table below.
+If supported, these standard virtual wires must be implemented in accordance
+to the specification to enable inter-operability and compatibility. However, the
+support of these Virtual Wires is platform specific.
+Platform specific Virtual Wires are allowed by the specification with Virtual Wire
+Index 64 to 127. They are defined in the respective platform specific
+documents and outside the scope of the specification.
+
+62
+
+Document Number: 841685, Revision: 1.6
+
+Table 9: System Event Virtual Wires for Index=2
+Virtual Wire Index
+
+2
+
+Virtual Wire Group
+
+System Event
+
+Reset
+
+eSPI Reset# 1
+
+Direction
+
+Controller to Target
+
+Notes:
+1. Depending on the usage, the state of these virtual wires may need to be
+retained in deeper power well such that they are not reset by eSPI
+Reset#.
+Bit
+
+Virtual Wire
+
+7
+
+Description
+Reserved
+SLP_S5# Valid: This bit indicates the validity of SLP_S5# virtual wire
+on bit[2].
+
+6
+
+‘0’ – Not valid
+‘1’ – Valid
+SLP_S4# Valid: This bit indicates the validity of SLP_S4# virtual wire
+on bit[1].
+
+5
+
+‘0’ – Not valid
+‘1’ – Valid
+SLP_S3# Valid: This bit indicates the validity of SLP_S3# virtual wire
+on bit[0].
+
+4
+
+‘0’ – Not valid
+‘1’ – Valid
+
+3
+
+RSV
+
+Reserved
+S5 Sleep Control: Sent when the power to non-critical systems should
+be shut off in S5 (Soft Off).
+
+2
+
+SLP_S5#
+Polarity: Active low.
+Reset: Active.
+S4 Sleep Control: Sent when the power to non-critical systems should
+be shut off in S4 (Suspend to Disk).
+
+1
+
+SLP_S4#
+Polarity: Active low.
+Reset: Active.
+S3 Sleep Control: Sent when the power to non-critical systems should
+be shut off in S3 (Suspend to RAM).
+
+0
+
+SLP_S3#
+Polarity: Active low.
+Reset: Active.
+
+Document Number: 841685, Revision: 1.6
+
+63
+
+Table 10: System Event Virtual Wires for Index=3
+
+Bit
+
+Virtual Wire Index
+
+3
+
+Virtual Wire Group
+
+System Event
+
+Reset
+
+eSPI Reset#
+
+Direction
+
+Controller to Target
+
+Virtual Wire
+
+7
+
+Description
+Reserved
+OOB_RST_WARN Valid: This bit indicates the validity of
+OOB_RST_WARN virtual wire on bit[2].
+
+6
+
+‘0’ – Not valid
+‘1’ – Valid
+PLTRST# Valid: This bit indicates the validity of PLTRST# virtual wire
+on bit[1].
+
+5
+
+‘0’ – Not valid
+‘1’ – Valid
+SUS_STAT# Valid: This bit indicates the validity of SUS_STAT#
+virtual wire on bit[0].
+
+4
+
+‘0’ – Not valid
+‘1’ – Valid
+
+3
+
+2
+
+RSV
+
+OOB_RST_WARN
+
+Reserved
+OOB Reset Warn: Sent by controller just before the OOB processor is
+about to enter reset. Upon receiving, the EC or BMC must flush and
+quiesce its OOB Channel upstream request queues and assert
+OOB_RST_ACK VWire upon completing all the outstanding
+transactions. The controller subsequently completes any outstanding
+posted transactions or completions and then disables the OOB Channel
+via a write to the target's Configuration Register.
+Polarity: Active high.
+Reset: Inactive.
+Platform Reset: Command to indicate Platform Reset assertion and
+de-assertion.
+
+1
+
+PLTRST#
+Polarity: Active low.
+Reset: Active.
+Suspend Status: Sent when the system will be entering a low power
+state soon.
+
+0
+
+SUS_STAT#
+Polarity: Active low.
+Reset: Active.
+
+64
+
+Document Number: 841685, Revision: 1.6
+
+Table 11: System Event Virtual Wires for Index=4
+
+Bit
+
+Virtual Wire Index
+
+4
+
+Virtual Wire Group
+
+System Event
+
+Reset
+
+eSPI Reset#
+
+Direction
+
+Target to Controller
+
+Virtual Wire
+
+Description
+PME# Valid: This bit indicates the validity of PME# virtual wire on
+bit[3].
+
+7
+
+‘0’ – Not valid
+‘1’ – Valid
+WAKE# Valid: This bit indicates the validity of WAKE# virtual wire on
+bit[2].
+
+6
+
+‘0’ – Not valid
+‘1’ – Valid
+
+5
+
+Reserved
+OOB_RST_ACK Valid: This bit indicates the validity of OOB_RST_ACK
+virtual wire on bit[0].
+
+4
+
+‘0’ – Not valid
+‘1’ – Valid
+PCI Power Management Event: eSPI targets generated PCI PME#
+event. Used by the target to wake the host from Sx through PCI
+defined PME#.
+If the event occurs while system is in S0, a SCI is generated instead.
+
+3
+
+PME#
+
+Shared by multiple PCI devices on the platform.
+Polarity: Active low.
+Reset: Inactive.
+Wake#: Used by the target to wake the Host from Sx on any event;
+also general purpose event to wake on LID switch or AC insertion, etc.
+It is used to generate an eSPI device specific non-PME# wake.
+If the event occurs while system is in S0, a SCI is generated instead.
+
+2
+
+WAKE#
+
+Shared by multiple eSPI endpoints.
+Note: The eSPI WAKE# virtual wire is not equivalent to the PCIe
+WAKE# pin and it does not function as the PCIe WAKE#.
+Polarity: Active low.
+Reset: Inactive.
+
+1
+
+RSV
+
+Reserved
+OOB Reset Acknowledge: Sent by target in response to
+OOB_RST_WARN virtual wire. Refer to the description of
+OOB_RST_WARN for details.
+
+0
+
+OOB_RST_ACK
+Polarity: Active high.
+Reset: Inactive.
+
+Document Number: 841685, Revision: 1.6
+
+65
+
+Table 12: System Event Virtual Wires for Index=5
+
+Bit
+
+Virtual Wire Index
+
+5
+
+Virtual Wire Group
+
+System Event
+
+Reset
+
+eSPI Reset#
+
+Direction
+
+Target to Controller
+
+Virtual Wire
+
+Description
+TARGET_BOOT_LOAD_STATUS Valid: This bit indicates the validity
+of TARGET_BOOT_LOAD_STATUS virtual wire on bit[3].
+
+7
+
+‘0’ – Not valid
+‘1’ – Valid
+ERROR_NONFATAL Valid: This bit indicates the validity of
+ERROR_NONFATAL virtual wire on bit[2].
+
+6
+
+‘0’ – Not valid
+‘1’ – Valid
+ERROR_FATAL Valid: This bit indicates the validity of ERROR_FATAL
+virtual wire on bit[1].
+
+5
+
+‘0’ – Not valid
+‘1’ – Valid
+TARGET_BOOT_LOAD_DONE Valid: This bit indicates the validity
+of TARGET_BOOT_LOAD_DONE virtual wire on bit[0].
+
+4
+
+‘0’ – Not valid
+‘1’ – Valid
+Target Boot Load Status: Sent by EC or BMC upon completion of
+Target Boot Load from the controller attached flash.
+‘0’ – The boot image is corrupted, incomplete or otherwise unusable.
+
+3
+
+TARGET_BOOT_LOAD_
+STATUS
+
+‘1’ – The boot code load was successful and that the integrity of the
+image is intact, or the boot code load from controller attached flash is
+not required.
+Note: The Target_Boot_Load_Status must be sent in either the same or
+a previous virtual wire message as the Target_Boot_Load_Done.
+Polarity: As defined above.
+Reset: ‘0’.
+Error Non-Fatal: Sent by target when a non-fatal error is detected.
+
+2
+
+ERROR_NONFATAL
+
+Note: Refer to Section 8.2 for the error conditions that Non-Fatal Error
+virtual wire is signaled.
+Polarity: Active high.
+Reset: Inactive.
+Error Fatal: Sent by target when a fatal error is detected.
+
+1
+
+ERROR_FATAL
+
+Note: Refer to Section 8.2 for the error conditions that Fatal Error
+virtual wire is signaled.
+Polarity: Active high.
+Reset: Inactive.
+
+66
+
+Document Number: 841685, Revision: 1.6
+
+0
+
+TARGET_BOOT_LOAD_
+DONE
+
+Target Boot Load Done: Sent when EC or BMC has completed its
+boot process as indication to eSPI controller to continue with the G3 to
+S0 exit. eSPI controller waits for the assertion of this virtual wire before
+proceeding with the SLP_S5# deassertion.
+Polarity: Active high.
+Reset: Inactive.
+
+Table 13: System Event Virtual Wires for Index=6
+
+Bit
+
+Virtual Wire Index
+
+6
+
+Virtual Wire Group
+
+System Event
+
+Reset
+
+PLTRST#
+
+Direction
+
+Target to Controller
+
+Virtual Wire
+
+Description
+HOST_RST_ACK Valid: This bit indicates the validity of
+HOST_RST_ACK virtual wire on bit[3].
+
+7
+
+‘0’ – Not valid
+‘1’ – Valid
+RCIN# Valid: This bit indicates the validity of RCIN# virtual wire on
+bit[2].
+
+6
+
+‘0’ – Not valid
+‘1’ – Valid
+SMI# Valid: This bit indicates the validity of SMI# virtual wire on
+bit[1].
+
+5
+
+‘0’ – Not valid
+‘1’ – Valid
+SCI# Valid: This bit indicates the validity of SCI# virtual wire on
+bit[0].
+
+4
+
+‘0’ – Not valid
+‘1’ – Valid
+
+3
+
+HOST_RST_ACK
+
+Host Reset Acknowledge: Sent by target in response to
+HOST_RST_WARN virtual wire. Refer to the description of
+HOST_RST_WARN for details.
+Polarity: Active high.
+Reset: Inactive.
+Reset CPU INIT#: Sent to request CPU reset on behalf of the
+keyboard controller.
+
+2
+
+RCIN#
+Polarity: Active low.
+Reset: Inactive.
+System Management Interrupt (SMI): Sent as general purpose
+alert resulting in SMI code being invoked by the BIOS.
+
+1
+
+SMI#
+Polarity: Active low.
+Reset: Inactive.
+
+Document Number: 841685, Revision: 1.6
+
+67
+
+Bit
+
+Virtual Wire
+
+Description
+System Controller Interrupt (SCI): Sent as general purpose alert
+resulting in ACPI method being invoked by the OS.
+
+0
+
+SCI#
+Polarity: Active low.
+Reset: Inactive.
+
+Table 14: System Event Virtual Wires for Index=7
+
+Bit
+
+Virtual Wire Index
+
+7
+
+Virtual Wire Group
+
+System Event
+
+Reset
+
+PLTRST#
+
+Direction
+
+Controller to Target
+
+Virtual Wire
+
+7
+
+Description
+Reserved
+NMIOUT# Valid: This bit indicates the validity of NMIOUT# virtual
+wire on bit[2].
+
+6
+
+‘0’ – Not valid
+‘1’ – Valid
+SMIOUT# Valid: This bit indicates the validity of SMIOUT# virtual wire
+on bit[1].
+
+5
+
+‘0’ – Not valid
+‘1’ – Valid
+HOST_RST_WARN Valid: This bit indicates the validity of
+HOST_RST_WARN virtual wire on bit[0].
+
+4
+
+‘0’ – Not valid
+‘1’ – Valid
+
+3
+
+RSV
+
+Reserved
+NMI Output: Sent by controller as indication that NMI# event occurs.
+The ‘0’ and ‘1’ on this virtual wire correspond to the assertion and
+deassertion of the NMI# to CPU respectively.
+
+2
+
+NMIOUT#
+
+Note: This virtual wire is typically only used in server platforms.
+Polarity: Active low.
+Reset: Inactive.
+SMI Output: Sent by controller as indication that SMI# event occurs.
+The ‘0’ and ‘1’ on this virtual wire correspond to the assertion and
+deassertion of the SMI# to CPU respectively.
+
+1
+
+SMIOUT#
+
+Note: This virtual wire is typically only used in server platforms.
+Polarity: Active low.
+Reset: Inactive.
+
+68
+
+Document Number: 841685, Revision: 1.6
+
+Bit
+
+0
+
+Virtual Wire
+
+Description
+Host Reset Warn: Sent by controller just before the Host is about to
+enter reset. Upon receiving, the EC or BMC must flush and quiesce its
+upstream Peripheral Channel request queues and assert
+HOST_RST_ACK VWire upon completing all the outstanding
+transactions. The controller subsequently completes any outstanding
+posted transactions or completions and then disables the Peripheral
+Channel via a write to the target's Configuration Register.
+
+HOST_RST_WARN
+
+Polarity: Active high.
+Reset: Inactive.
+
+4.2.2.3
+
+Communicating Timing Event on Virtual Wires
+Some of the events communicated through the Virtual Wire Channel could be
+timing events.
+For example, the assertion of a particular pin could indicate one event. The
+prolonged assertion of the same pin for a certain period of time could indicate a
+different event.
+One solution is to send two different messages, for each of the events; one
+message is sent when the pin asserts and another message is sent when the
+pin has been asserted for a certain period of time.
+This method requires the source of the message to implement a timer that
+times the duration of the pin assertion, which upon time-out, results in a
+different message being sent.
+Multiple Virtual Wires communicated in the same packet will change state at
+the receiver the same time at the deassertion edge of the Chip Select#. If the
+sequence of the Virtual Wires is required to be communicated, the Virtual Wire
+that happens later must be communicated in the next Chip Select# assertion to
+signify the sequence.
+
+Figure 43: Virtual Wires with Sequence Communicated
+CLK
+
+Chip Select#
+
+Data[n:0]
+
+PUT_
+VWIRE
+
+VW
+Count
+0x00
+
+VW
+Index
+(a)
+
+VW
+Data
+
+CRC
+
+VW[x]_VALID = ’1'
+VW[x] = ‘1’
+
+RSP
+
+STS
+
+CRC
+
+PUT_
+VWIRE
+
+VW
+Count
+0x00
+
+VW
+Index
+(b)
+
+VW
+Data
+
+CRC
+
+RSP
+
+STS
+
+CRC
+
+VW[y]_VALID = ’1'
+VW[y] = ‘1’
+
+Virtual Wire[x, y] represented by Signal[x, y] at the Receiver, with the sequence Signal [x] occurs followed by Signal [y]
+Signal [x]
+
+Signal [y]
+
+4.2.2.4
+
+Interrupt Event
+Interrupt event is supported from eSPI target to controller through the virtual
+wire channel. Virtual Wire Index 0 and 1 are defined for communicating
+
+Document Number: 841685, Revision: 1.6
+
+69
+
+interrupt events and up to 256 IRQ lines can be communicated in-band over
+the eSPI bus.
+Interrupt level high (‘1’) indicates interrupt assertion whereas interrupt level
+low (‘0’) indicates interrupt deassertion. Interrupt events virtual wires are
+active high.
+For simplicity, eSPI interrupt event virtual wires are default deasserted (level
+low) thus eliminating the legacy SERIRQ behavior where SERIRQ line is default
+pulled high (‘1’) even though there is no interrupt expected to be generated.
+Table 15: Interrupt Event (IRQ) Virtual Wire Generation
+IRQ
+Source
+(In Target)
+
+Source Level
+
+IRQ Enable
+(0=Disable, 1=Enable)
+
+0
+
+0
+
+0
+
+Active High
+
+1 -> 0
+
+Default. No IRQ VW sent
+No IRQ VW sent
+
+0 -> 1
+
+1
+
+Assertion. IRQ VW (Level=’1’) sent
+
+1 -> 0
+
+1
+
+Deassertion. IRQ VW (Level=’0’)
+sent
+
+1
+
+0 -> 1
+
+Assertion. IRQ VW (Level=’1’) sent
+
+1
+
+1 -> 0
+
+Deassertion. IRQ VW (Level=’0’)
+sent
+
+0 -> 1
+1 -> 0
+1
+1
+
+Active Low
+
+0 -> 1
+
+Target to Controller IRQ Virtual
+Wire
+(Active High)
+
+0
+
+No IRQ VW sent
+
+0
+
+Default. No IRQ VW sent
+
+0 -> 1
+1 -> 0
+
+No IRQ VW sent
+
+0 -> 1
+
+1
+
+Deassertion. IRQ VW (Level=’0’)
+sent
+
+1 -> 0
+
+1
+
+Assertion. IRQ VW (Level=’1’) sent
+
+0
+
+0 -> 1
+
+Assertion. IRQ VW (Level=’1’) sent
+
+0
+
+1 -> 0
+
+Deassertion. IRQ VW (Level=’0’)
+sent
+
+0 -> 1
+1 -> 0
+
+0
+
+No IRQ VW sent
+
+Both level-triggered and edge-triggered interrupt are supported.
+For level-triggered interrupt, the level of the interrupt line is communicated
+thru the virtual wire whenever there is a change to the state of the interrupt
+line from ‘0’ to ‘1’ or vice versa. The interrupt line allocated must be configured
+to the target during initialization. Multiple interrupt sources on the target are
+allowed to be shared on a single level-triggered interrupt line. The shared
+interrupt line will not change state until all the pending interrupts are serviced
+which will then trigger an interrupt event virtual wire being sent by the target.
+70
+
+Document Number: 841685, Revision: 1.6
+
+The exact method of interrupt line allocation and interrupt sharing is platform
+specific and outside the scope of the specification.
+To avoid spurious interrupts when using level-triggered interrupts, it is
+recommended that the software driver and the eSPI target implement the
+following behavior: When the driver has completed the interrupt service
+routine, it should issue a posted memory write to the eSPI target device to
+clear the interrupt. Then, the driver should issue a memory read to the same
+interrupt clear register. At the eSPI target, the interrupt event virtual wire
+should be sent as cleared, between the posted memory write that cleared the
+interrupt, and returning the subsequent memory read completion.
+The interrupt event virtual wire defines a mechanism of sending edge-triggered
+interrupt. An edge event interrupt is communicated in the same Virtual Wire
+packet by first indicating the new value of the interrupt line, and subsequently
+the next value that the interrupt line toggles. This may be interleaved by any
+other Virtual Wire groups within the same packet. The mechanism consumes
+two of the Virtual Wire count.
+Each of the virtual wire including interrupt event virtual wire must not have
+more than 2 transitions being communicated within a Virtual Wire packet,
+otherwise the corresponding virtual wire behavior is undefined. The initiator
+must make sure this is not violated. It is optional for the receiver to check for
+this violation. The 2 transitions may be a ‘0’-to-‘1’-to-‘0’ or ‘1’-to-‘0’-to-‘1’
+transition. The receiver must track the state of the interrupt event virtual wire
+while it is being received and translate it to an interrupt event pulse taking
+effect at the deassertion edge of the Chip Select#. The pulse width required is
+receiver specific such that the edge event interrupt can be recognized correctly
+by its internal logic. Edge-triggered interrupts must not be shared on an
+interrupt line.
+It is possible for eSPI target to communicate edge-triggered interrupt using
+two separate Virtual Wire packets, i.e. interrupt assertion in one Virtual Wire
+packet followed by interrupt deassertion in a subsequent Virtual Wire packet.
+However, it is the responsibility of the target to ensure that interrupt assertion
+edge is always communicated without being lost, such as in the boundary
+where the next interrupt event happens before the prior interrupt deassertion
+virtual wire is able to be sent out.
+As interrupt event virtual wire is communicated through an independent
+channel from the peripheral accesses, data may not be guaranteed to be in the
+main memory before interrupt is delivered to the CPU. This can lead to data
+consistency problem with the Producer-Consumer model. Software must
+perform a read to any register in the target such that the target’s posted write
+buffers are flushed before accessing data written by the target to the main
+memory.
+
+Document Number: 841685, Revision: 1.6
+
+71
+
+Figure 44: Edge-triggered Interrupt through Virtual Wire
+CLK
+
+Chip Select#
+
+Data[n:0]
+
+GET_
+VWIRE
+
+CRC
+
+RSP
+
+VW
+Count
+0x01
+
+VW
+Index
+0 or 1
+
+VW
+Data
+
+IRQ Line = ‘X’
+Level = ‘1’
+
+VW
+Index
+0 or 1
+
+VW
+Data
+
+STS
+
+CRC
+
+IRQ Line = ’X'
+Level = ‘0’
+
+Edge-triggered interrupt represented by Interrupt [X] signal at the Receiver
+
+Pulse width is receiver
+specific such that the
+edge event can be
+recognized correctly
+
+Interrupt [X]
+
+4.2.2.5
+
+General-Purpose I/O Expander
+The specification allows the eSPI controller to claim the General-Purpose I/O
+(GPIO) pins physically resided on the eSPI target side as part of its own virtual
+I/O pins.
+If the Virtual GPIO is configured as an output pin, the eSPI controller tunnels
+the state of the Virtual GPIO pin through in-band messaging and the eSPI
+target, upon receiving the message, reflects the state on the GPIO pin
+physically located on the target side.
+If the Virtual GPIO is configured as an input pin, the eSPI target samples the
+state of the physical GPIO pin and then tunnels the state of the GPIO pin
+through in-band messaging on any pin state transition.
+All the GPIO pins sharing the same index number must be configured to the
+same direction. They can either be configured as all inputs or all outputs, but
+not a combination of inputs and outputs.
+Similarly, a group of Virtual GPIOs sharing the same index will share the same
+reset. The reset is programmable to be reset by either eSPI Reset# or Platform
+Reset.
+The GPIO software interface on the eSPI controller and eSPI target is
+implementation specific. The software is responsible to set up the configuration
+for the GPIO pins on both sides appropriately and in the consistent manner.
+The detail of the GPIO Configuration Registers is implementation specific.
+The mapping of the Virtual GPIO pin to the physical GPIO pin on the eSPI
+target side is implementation specific and outside the scope of the
+specification.
+
+4.2.3
+
+OOB (Tunneled SMBus) Message Channel
+The SMBus packets can be tunneled through eSPI as Out-Of-Band(OOB)
+messages. The whole SMBus packet is embedded inside the eSPI OOB message
+as data.
+
+72
+
+Document Number: 841685, Revision: 1.6
+
+Only SMBus block writes are tunneled through the eSPI OOB message. These
+include the SMBus Management Component Transport Protocol (MCTP) packets
+which are based on the SMBus block write protocol.
+The SMBus Target Address, SMBus Command Opcode, SMBus Byte Count,
+SMBus Data fields and the optional PEC byte are sent as data within the eSPI
+OOB message packet.
+The SMBus Byte Count field does not include the PEC byte. It comprehends the
+actual payload of the SMBus block write packet itself excluding the 3 SMBus
+header bytes.
+The Length field of the OOB message comprehends the count by the SMBus
+Byte Count field, in addition to the 3 header bytes (i.e. SMBus Target Address,
+SMBus Command Opcode and SMBus Byte Count) and an optional PEC byte.
+The presence of SMBus PEC is determined through a simple arithmetic
+operation between the eSPI OOB header length field and the SMBus Byte
+Count.
+The Maximum Payload Size (MPS) for OOB Message channel applies to the
+actual payload of the protocol embedded in the packet that tunneled through
+the channel, such as but not limited to the MCTP and the generic SMBus block
+writes.
+Figure 45: OOB (Tunneled SMBus) Message Packet Format
+
+MCTP over SMBus is a specific form of the SMBus block write packet with the
+SMBus Command Opcode of 0Fh (i.e. MCTP). The MCTP header and MCTP
+payload are embedded as the SMBus block write data bytes. For eSPI OOB
+MCTP packet, the Maximum Payload Size (MPS) applies to the MCTP payload
+itself excluding the MCTP header and the optional PEC byte. For example, MPS
+of 64 bytes allows the transfer of a MCTP packet with up to 64 bytes MCTP
+payload over the OOB Message channel. In the case of 64 bytes MCTP payload
+with the optional PEC byte, the SMBus byte count field and the OOB header
+length field are 69 bytes and 73 bytes respectively.
+
+Document Number: 841685, Revision: 1.6
+
+73
+
+Figure 46: OOB MCTP Packet
+
+For eSPI OOB generic SMBus block write packet, the Maximum Payload Size
+(MPS) applies to the number of SMBus block write data bytes allowed in a
+packet excluding the optional PEC byte. For example, MPS of 64 bytes allows
+the transfer of a generic SMBus block write packet with up to 64 bytes data
+payload over the OOB Message channel. In the case of 64 bytes data payload
+with the optional PEC byte, the SMBus byte count field and the OOB header
+length field are 64 bytes and 68 bytes respectively.
+Figure 47: OOB Generic SMBus Block Write Format
+
+74
+
+Document Number: 841685, Revision: 1.6
+
+4.2.4
+
+Run-time Flash Access Channel
+The Flash Access channel provides a path allowing the flash components to be
+shared run-time between chipset and the eSPI targets that require flash
+accesses such as EC and BMC.
+Once the Flash Controller in the chipset has completed the flash initialization,
+the Flash Access channel is enabled on the eSPI target side.
+The Flash Access channel uses the same packet format as the eSPI Peripheral
+Channel transactions.
+The Tag field is used to match the completion with the request. Flash access
+requests with the same tag must be completed in order.
+
+Figure 48: Flash Access Request Packet Format
+7 6 5 4 3 2 1 0
+Byte 0
+Byte 1
+
+Cycle Type
+Length[11:8]
+
+Tag
+
+Byte 2
+
+Length[7:0]
+
+Byte 3
+
+Address [31:24]
+
+Byte 4
+
+Address [23:16]
+
+Byte 5
+
+Address [15:8]
+
+Byte 6
+
+Address [7:0]
+
+Byte 7
+
+Data Byte 0
+
+:
+:
+:
+Byte n+7
+
+Data Byte 1
+:
+:
+:
+
+7 6 5 4 3 2 1 0
+Byte 0
+Header
+
+Data
+
+Byte 1
+
+Cycle Type
+Tag
+
+Length[11:8]
+
+Byte 2
+
+Length[7:0]
+
+Byte 3
+
+Address [31:24]
+
+Byte 4
+
+Address [23:16]
+
+Byte 5
+
+Address [15:8]
+
+Byte 6
+
+Address [7:0]
+
+Data Byte n
+
+Header
+
+Flash Read/Flash Erase
+
+Flash Write
+
+Figure 49: Flash Access Completion Packet Format
+7 6 5 4 3 2 1 0
+Byte 0
+Byte 1
+
+7 6 5 4 3 2 1 0
+
+Cycle Type
+Tag
+
+Length[11:8]
+
+Byte 2
+
+Length[7:0]
+
+Byte 3
+
+Data Byte 0
+
+:
+:
+:
+
+Data Byte 1
+:
+:
+:
+
+Byte n+3
+
+Data Byte n
+
+Byte 0
+Header
+
+Byte 1
+Byte 2
+
+Data
+
+Cycle Type
+Tag
+
+Length[11:8]
+Length[7:0]
+
+Flash Write/Erase Completion
+
+Flash Read Completion
+
+Document Number: 841685, Revision: 1.6
+
+75
+
+Figure 50: Flash Access RPMC Packet Format
+Flash RPMC OP1
+
+7
+Byte 0
+
+6
+
+5
+
+4
+
+3
+
+2
+
+Flash RPMC OP2
+
+1
+
+0
+
+7
+
+Cycle Type (eSPI RPMC OP1)
+
+Byte 1
+
+Tag
+
+Byte 2
+
+Byte 0
+Header
+
+Length[11:8]
+Length[7:0]
+
+5
+
+4
+
+3
+
+2
+
+1
+
+0
+
+Cycle Type (eSPI RPMC OP2)
+
+Byte 1
+
+Tag
+
+Byte 2
+
+Header
+
+Length[11:8]
+Length[7:0]
+
+Data Byte 0
+(RPMC Opcode: OP1)
+
+Byte 3
+:
+:
+:
+
+Data Byte 1
+:
+:
+:
+
+Byte n+3
+
+Data
+
+Data Byte n
+
+Flash RPMC OP1 Completion (Successful)
+
+7
+Byte 0
+
+6
+
+6
+
+5
+
+4
+
+3
+
+2
+
+1
+
+Flash RPMC OP2 Completion (Successful)
+
+0
+
+7
+
+Cycle Type
+
+Byte 0
+
+(Successful Completion without Data)
+
+Byte 1
+
+Tag
+
+Byte 2
+
+Header
+
+Length[11:8]
+Length[7:0]
+
+Byte 1
+Byte 2
+Byte 3
+:
+:
+:
+
+Byte n+3
+
+6
+
+5
+
+4
+
+3
+
+2
+
+1
+
+0
+
+Cycle Type
+
+(Successful Completion w ith Data)
+
+Tag
+
+Length[11:8]
+
+Header
+
+Length[7:0]
+Data Byte 0
+(Extended Status)
+Data Byte 1
+:
+:
+:
+
+Data
+
+Data Byte n
+
+Flash RPMC OP1/OP2 Completion (Unsuccessful)
+
+7
+Byte 0
+Byte 1
+Byte 2
+
+76
+
+6
+
+5
+
+4
+
+3
+
+2
+
+1
+
+0
+
+Cycle Type
+
+(Unsuccessful Completion without Data)
+
+Tag
+
+Length[11:8]
+
+Header
+
+Length[7:0]
+
+Document Number: 841685, Revision: 1.6
+
+4.2.4.1
+
+Controller Attached Flash Sharing
+Controller Attached Flash Sharing refers to the scheme where flash components
+are attached to the eSPI controller such as the chipset. eSPI targets are
+allowed to access to the shared flash component through the Flash Access
+channel. The flash components may be on an independent SPI interface, or on
+a shared SPI/eSPI interface depending on the system configuration.
+
+Figure 51: Independent Flash SPI and eSPI Interface
+
+SPI Flash
+Controller
+eSPI Flash
+Access
+
+CS1#
+
+SPI
+
+eSPI Protocol Block
+
+eSPI
+
+Flash
+
+CS2#
+EC/BMC/SIO
+
+Figure 52: Shared SPI and eSPI Interface
+
+SPI Flash
+Controller
+eSPI Flash
+Access
+
+eSPI Protocol Block
+
+CS2#
+
+CS1#
+
+SPI
+
+Flash
+
+Document Number: 841685, Revision: 1.6
+
+eSPI
+
+EC/BMC/SIO
+
+77
+
+eSPI targets such as EC and BMC must be able to function appropriately with
+codes executed from other storage devices such as its own ROM before Flash
+Access channel is enabled for the run-time flash sharing.
+The Controller Attached Flash Sharing scheme uses 2 dedicated eSPI command
+opcodes: GET_FLASH_NP and PUT_FLASH_C (Table 2).
+Any run-time access to the flash component through the eSPI interface will go
+through the eSPI controller, which then routes the cycle to the Flash Access
+block, before the cycle is forwarded to the SPI Flash Controller. SPI Flash
+controller will perform the access to the flash on behalf of the eSPI target.
+SPI Flash controller as the flash device owner is responsible to handle the
+differences between the different flash vendors, making them transparent to
+the flash access channel on the eSPI bus.
+The flash access addresses used by the eSPI targets in the Flash Access
+transactions are physical Flash Linear Addresses. The physical addresses cover
+the entire flash addressing space. However, the SPI Flash controller may
+impose access permission control for Flash Access transactions initiated by the
+eSPI targets. The detail of the access permission control is outside the scope of
+the specification.
+Any attempt to access a flash region without the access permission is
+considered an error. The SPI Flash controller is required to check this and
+would synthesize an unsuccessful completion back to the eSPI target.
+The action taken by the eSPI target in response to unsuccessful completion is
+implementation specific.
+In the Controller Attached Flash Sharing scheme, Flash Read, Flash Write and
+Flash Erase commands are supported over eSPI bus. These commands will be
+forwarded by the eSPI controller to the flash controller where they will be
+mapped to the corresponding flash instructions by the flash controller.
+Flash Read and Flash Write transactions are non-posted transactions. Each of
+the transactions will have a corresponding completion which indicates the
+status of the requested operation, together with data if the cycle is a Flash
+Read. The status of the completion will be conveyed back to the eSPI target.
+Flash Access Channel Maximum Read Request Size parameter in the Channel
+Capability and Configuration register is defined to allow the eSPI controller to
+limit the Flash Read request size to the size supported by the eSPI controller.
+Similarly, Flash Access Channel Maximum Payload Size parameter in the
+Channel Capability and Configuration register is defined to allow the eSPI
+controller to limit the Flash Write data payload size.
+Flash Erase is a non-posted request with no data. This command instructs the
+SPI Flash controller to erase a part of the region allocated to the eSPI target.
+The Address field specifies the beginning of the erase block and the least
+significant 3 bits of the length field specifies the size of the block to be erased.
+The encoding of the least significant 3 bits of the length field matches the value
+of the Flash Block Erase Size field of the Channel Capabilities and Configuration
+register. The specified address must be aligned to the block erase size. The
+
+78
+
+Document Number: 841685, Revision: 1.6
+
+supported erase block size is programmable and is communicated by the eSPI
+controller to the target through the Channel Capabilities and Configuration
+register. However, length field encoding of “011” is not applicable for Flash
+Erase in Controller Attached Flash Sharing.
+eSPI controller will forward the transaction as it is to the flash controller. The
+flash controller will then perform the necessary check to ensure that the cycle
+is supported, prior to sending it out to the flash. If the cycle is not supported
+due to invalid addressing mode (32-bit versus 24/26-bit addressing),
+unsupported command, unsupported block erase size or any other reasons, the
+flash controller will synthesize an unsuccessful completion to the eSPI
+controller which will then forward the completion to the eSPI target over the
+eSPI bus, without sending the instruction to flash.
+
+4.2.4.2
+
+Target Attached Flash Sharing
+An alternate configuration for run-time flash access supported by the eSPI
+protocol is to put the flash device(s) behind the eSPI target such as EC or BMC.
+All the flash accesses by the eSPI controller are tunneled to the eSPI target
+over the eSPI protocol (Figure 53). The eSPI target then communicates with
+the flash device(s) to perform the requested flash operations and return the
+completion data back to the controller over the eSPI protocol. This allows runtime flash sharing between the eSPI target and the eSPI controller.
+The Target Attached Flash Sharing scheme uses 2 dedicated eSPI command
+opcodes: PUT_FLASH_NP and GET_FLASH_C (Table 3).
+The Target Attached Flash Sharing is mutually exclusive with the Controller
+Attached Flash Sharing for a given eSPI interface. Prior to Flash Access channel
+being enabled, either the Target Attached Flash Sharing or the Controller
+Attached Flash Sharing is selected for operation, but not both. The eSPI
+controller will have access to the flash as soon as the Flash Access channel is
+enabled on the eSPI target side.
+The support of Target attached Trusted Platform Module (TPM) is beyond the
+scope of this specification.
+
+Document Number: 841685, Revision: 1.6
+
+79
+
+Figure 53: Target Attached Flash Sharing
+
+SPI Flash
+Controller
+Target Attached
+Flash Access
+
+eSPI Protocol
+Block
+
+eSPI SerDes Block
+
+Controller eSPI Bus
+
+eSPI Target
+(EC or BMC)
+
+EC or BMC SPI Bus
+
+Flash
+
+4.2.4.2.1
+
+Target Attached Flash Sharing Operation
+
+The eSPI Flash Access Channel in this scheme defines a set of Standard flash
+commands. These commands enable the typical flash accesses supported by
+most flash devices. In addition, up to 16 Platform-Specific flash commands
+maybe defined for specific flash devices. Platform-Specific commands are
+outside the scope of the eSPI specification. Table 16 lists the Flash Operations
+that are supported in the Controller Attached and Target Attached flash
+configurations over the eSPI protocol.
+For all the Standard and Platform-Specific commands, the flash device owner is
+responsible for handling the differences between the different flash vendors
+and low-level flash access operations, making these differences transparent to
+the eSPI controller.
+The flash device owner is also responsible for managing the various flash
+access parameters, including, but not limited to flash Single/Dual/Quad IO
+mode for Opcode/Address/Data phases, flash Mode cycles, flash addressing
+mode (24-bit vs. 32-bit), flash Wait cycles (bus turnaround time), flash
+command sequencing (e.g., Write Enable prior to a Write), flash
+Suspend/Resume (to manage QoS).
+The Address and Length fields ({Length1[3:0], Length0[7:0]}) of the standard
+eSPI packet format are defined as specified in Table 16. The Length field will
+specify the length of the write data to the flash device or requested size of the
+
+80
+
+Document Number: 841685, Revision: 1.6
+
+
