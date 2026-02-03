@@ -1,52 +1,158 @@
-# Saleae HLA: eSPI (Intel-style)
+# Saleae Serial Peripheral Interface (SPI) Analyzer
 
-This is a Saleae **High Level Analyzer (HLA)** extension for decoding **eSPI-over-SPI-capture** using Logic 2’s built-in **SPI** analyzer as the low-level source.
+Saleae Serial Peripheral Interface (SPI) Analyzer
 
-Milestone 1 decodes (best-effort):
-- **CMD** (command opcode) → names like `GET_STATUS`, `PUT_PC`, `PUT_NP`, etc.
-- **RSP** (response opcode) → `ACCEPT`, `DEFER`, `NON_FATAL_ERROR`, `FATAL_ERROR`, `NO_RESPONSE`
-- **WAIT_STATE** count (0x0F) at the start of the response phase
-- **STATUS** (16-bit) + decoded bit names (e.g. `PC_FREE`, `NP_AVAIL`, …)
-- **CRC** bytes shown and compared against a CRC-8(0x07) best-effort calculation
+## Getting Started
 
-Milestone 2 (partial):
-- **Virtual Wire (Channel 1)** packet decoding for `PUT_VWIRE` and `GET_VWIRE`
-  - decodes VW packet header (`count`) and groups (`index`, `data`)
-  - decodes interrupt event VW group (`index=0x00/0x01`) into IRQ number + level
+The following documentation describes how to build this analyzer locally. For more detailed information about the Analyzer SDK, debugging, CI builds, and more, check out the readme in the Sample Analyzer repository.
 
-Notes / limitations (Milestone 1):
-- eSPI has a 2-clock **TAR** window; when decoding from an 8-bit SPI analyzer stream, TAR may not align cleanly to a byte boundary. This HLA uses heuristics to locate the response phase.
-- Payload (HDR/DATA) parsing per command type is not fully implemented yet; it focuses on transaction framing and readability.
+https://github.com/saleae/SampleAnalyzer
 
-## Install (Logic 2)
-1. Logic 2 → **Extensions**.
-2. (Developer) **Install from Folder**.
-3. Select this folder: `saleae-espi-hla/`.
+### MacOS
 
-## Verify using the provided capture (Logic 2 v2.4.40)
-The repository includes a capture folder: `inbound/`.
+Dependencies:
 
-1. Logic 2 → **Open Capture…**
-2. Select the folder `saleae-espi-hla/inbound/` (it contains `meta.json` and `digital-*.bin`).
-3. Add the built-in **SPI** analyzer with these settings (from `inbound/meta.json`):
-   - MOSI: **Digital 1**
-   - MISO: **Digital 2**
-   - Clock: **Digital 7**
-   - Enable (CS#): **Digital 5** (Active Low)
-   - Bits per transfer: **8**
-   - Bit order: **MSB first**
-   - CPOL: **0** (clock low when idle)
-   - CPHA: **0** (sample on leading edge)
-4. Add the **eSPI (HLA)** analyzer on top of the SPI analyzer.
-5. Optional HLA settings:
-   - `show_raw = yes` to include raw MOSI/MISO bytes in the summary
-   - `split_on_idle_us` if your SPI analyzer does not emit enable/disable frames
+- XCode with command line tools
+- CMake 3.13+
+- git
 
-You should see one HLA frame per CS# transaction with summary text like:
-- `GET_STATUS (0x25) | CMD_CRC .. | ACCEPT (0x08) | STS .. | RSP_CRC ..`
-- `PUT_VWIRE (0x04) VW cnt=0 (n=1) [0] VW_IRQ lvl=1 irq=5 (idx=0x00 data=0x85) | ...`
-- `GET_VWIRE (0x05) | ACCEPT (0x08) VW cnt=0 (n=1) [0] VW_IRQ lvl=1 irq=5 (idx=0x00 data=0x85) | ...`
+Install command line tools after XCode is installed:
 
-## Development notes
-- Decoder source: `high_level_analyzer.py`
-- Spec references extracted into `spec_text/*.txt`
+```
+xcode-select --install
+```
+
+Then open XCode, open Preferences from the main menu, go to locations, and select the only option under 'Command line tools'.
+
+Install CMake on MacOS:
+
+1. Download the binary distribution for MacOS, `cmake-*-Darwin-x86_64.dmg`
+2. Install the usual way by dragging into applications.
+3. Open a terminal and run the following:
+
+```
+/Applications/CMake.app/Contents/bin/cmake-gui --install
+```
+
+_Note: Errors may occur if older versions of CMake are installed._
+
+Build the analyzer:
+
+```
+mkdir build
+cd build
+cmake ..
+cmake --build .
+```
+
+### Ubuntu 18.04+
+
+Dependencies:
+
+- CMake 3.13+
+- gcc 4.8+
+- git
+
+Misc dependencies:
+
+```
+sudo apt-get install build-essential
+```
+
+Build the analyzer:
+
+```
+mkdir build
+cd build
+cmake ..
+cmake --build .
+```
+
+### Windows
+
+Dependencies:
+
+- Visual Studio 2019
+- CMake 3.13+
+- git
+
+**Visual Studio 2019**
+
+_Note - newer and older versions of Visual Studio are likely to work._
+
+Setup options:
+
+- Workloads > Desktop & Mobile > "Desktop development with C++"
+
+Note - if CMake has any problems with the MSVC compiler, it's likely a component is missing.
+
+**CMake**
+
+Download and install the latest CMake release here.
+https://cmake.org/download/
+
+**git**
+
+Download and install git here.
+https://git-scm.com/
+
+Build the analyzer:
+
+```
+mkdir build
+cd build
+cmake .. -A x64
+```
+
+Then, open the newly created solution file located here: `build\spi_analyzer.sln`
+
+Optionally, build from the command line without opening Visual Studio:
+
+```
+cmake --build .
+```
+
+The built analyzer DLLs will be located here:
+
+`build\Analyzers\Debug`
+
+`build\Analyzers\Release`
+
+For debug and release builds, respectively.
+
+
+## Output Frame Format
+  
+### Frame Type: `"enable"`
+
+| Property | Type | Description |
+| :--- | :--- | :--- |
+
+
+Indicates the enable (chip select) signal has transitioned from inactive to active, present when the enable channel is used
+
+### Frame Type: `"disable"`
+
+| Property | Type | Description |
+| :--- | :--- | :--- |
+
+
+Indicates the enable signal has transitioned back to inactive, present when the enable channel is used
+
+### Frame Type: `"result"`
+
+| Property | Type | Description |
+| :--- | :--- | :--- |
+| `miso` | bytes | Master in slave out, width in bits is determined by settings |
+| `mosi` | bytes | Master out slave in, width in bits is determined by settings |
+
+A single word transaction, containing both MISO and MOSI
+
+### Frame Type: `"error"`
+
+| Property | Type | Description |
+| :--- | :--- | :--- |
+
+
+Indicates that the clock was in the wrong state when the enable signal transitioned to active
+

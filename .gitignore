@@ -1,16 +1,1 @@
-__pycache__/
-*.pyc
-
-# Local captures (big)
-inbound/
-*.sal
-*.logicdata
-
-# OS/editor
-.DS_Store
-Thumbs.db
-.vscode/
-.idea/
-
-# Logs
-*.log
+/build
