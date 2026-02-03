@@ -6,14 +6,13 @@
   "author": "ADA",
   "license": "MIT",
   "extensions": {
-    "high_level_analyzers": [
-      {
-        "name": "eSPI",
+    "high_level_analyzers": {
+      "eSPI": {
         "display_name": "eSPI (HLA)",
         "description": "Decode eSPI commands/responses and payload.",
         "language": "python",
         "entrypoint": "high_level_analyzer.py"
       }
-    ]
+    }
   }
 }
