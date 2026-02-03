@@ -1,20 +1,12 @@
 {
-  "apiVersion": "1.0.0",
-  "name": "eSPI HLA",
   "version": "0.1.0",
-  "description": "High Level Analyzer for decoding Intel-style eSPI transactions from an underlying SPI analyzer.",
+  "apiVersion": "1.0.0",
   "author": "ADA",
-  "license": "MIT",
+  "name": "eSPI HLA",
   "extensions": {
-    "high_level_analyzers": [
-      {
-        "name": "eSPI",
-        "display_name": "eSPI (HLA)",
-        "description": "Decode eSPI commands/responses and payload.",
-        "type": "high_level_analyzer",
-        "entryPoint": "high_level_analyzer.py",
-        "language": "python"
-      }
-    ]
+    "eSPI": {
+      "type": "HighLevelAnalyzer",
+      "entryPoint": "high_level_analyzer.Hla"
+    }
   }
 }
