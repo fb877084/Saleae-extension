@@ -14,7 +14,9 @@ SpiAnalyzer::SpiAnalyzer()
       mMosi( NULL ),
       mMiso( NULL ),
       mClock( NULL ),
-      mEnable( NULL )
+      mEnable( NULL ),
+      mInTransaction( false ),
+      mTransactionStartSample( 0 )
 {
     SetAnalyzerSettings( mSettings.get() );
     UseFrameV2();
@@ -34,6 +36,30 @@ void SpiAnalyzer::SetupResults()
         mResults->AddChannelBubblesWillAppearOn( mSettings->mMosiChannel );
     if( mSettings->mMisoChannel != UNDEFINED_CHANNEL )
         mResults->AddChannelBubblesWillAppearOn( mSettings->mMisoChannel );
+}
+
+void SpiAnalyzer::StartTransaction( U64 start_sample )
+{
+    mInTransaction = true;
+    mTransactionStartSample = start_sample;
+    mTransactionMosi.clear();
+    mTransactionMiso.clear();
+}
+
+void SpiAnalyzer::FinalizeTransaction( U64 end_sample )
+{
+    if( mInTransaction == false )
+        return;
+
+    mInTransaction = false;
+
+    // Decode eSPI best-effort and emit an extra FrameV2 spanning the whole CS#.
+    auto dec = mEspiDecoder.Decode( mTransactionMosi, mTransactionMiso );
+
+    FrameV2 espi_frame;
+    espi_frame.AddString( "text", dec.summary.c_str() );
+    mResults->AddFrameV2( espi_frame, "espi", mTransactionStartSample, end_sample + 1 );
+    mResults->CommitResults();
 }
 
 void SpiAnalyzer::WorkerThread()
@@ -64,6 +90,7 @@ void SpiAnalyzer::AdvanceToActiveEnableEdgeWithCorrectClockPolarity()
             {
                 FrameV2 frame_v2_start_of_transaction;
                 mResults->AddFrameV2( frame_v2_start_of_transaction, "enable", mCurrentSample, mCurrentSample + 1 );
+                StartTransaction( mCurrentSample );
             }
             break;
         }
@@ -183,6 +210,7 @@ bool SpiAnalyzer::WouldAdvancingTheClockToggleEnable( bool add_disable_frame, U6
         {
             FrameV2 frame_v2_end_of_transaction;
             mResults->AddFrameV2( frame_v2_end_of_transaction, "disable", enable_edge, enable_edge + 1 );
+            FinalizeTransaction( enable_edge );
         }
         else if( disable_frame != nullptr )
         {
@@ -341,14 +369,24 @@ void SpiAnalyzer::GetWord()
     // Max bits per transfer == 64, max bytes == 8
     U8 mosi_bytearray[ 8 ];
     U8 miso_bytearray[ 8 ];
-    for( int i = 0; i < bytes_per_transfer; ++i )
+    for( int i = 0; i < (int)bytes_per_transfer; ++i )
     {
         auto bit_offset = ( bytes_per_transfer - i - 1 ) * 8;
-        mosi_bytearray[ i ] = mosi_word >> bit_offset;
-        miso_bytearray[ i ] = miso_word >> bit_offset;
+        mosi_bytearray[ i ] = (U8)( mosi_word >> bit_offset );
+        miso_bytearray[ i ] = (U8)( miso_word >> bit_offset );
     }
     framev2.AddByteArray( "mosi", mosi_bytearray, bytes_per_transfer );
     framev2.AddByteArray( "miso", miso_bytearray, bytes_per_transfer );
+
+    // Accumulate bytes for a whole CS# transaction (for eSPI decode later)
+    if( mInTransaction )
+    {
+        for( U32 i = 0; i < bytes_per_transfer; ++i )
+        {
+            mTransactionMosi.push_back( mosi_bytearray[ i ] );
+            mTransactionMiso.push_back( miso_bytearray[ i ] );
+        }
+    }
 
     mResults->AddFrameV2( framev2, "result", first_sample, mClock->GetSampleNumber() + 1 );
 
@@ -358,6 +396,7 @@ void SpiAnalyzer::GetWord()
     {
         FrameV2 frame_v2_end_of_transaction;
         mResults->AddFrameV2( frame_v2_end_of_transaction, "disable", disable_event_sample, disable_event_sample + 1 );
+        FinalizeTransaction( disable_event_sample );
         AdvanceToActiveEnableEdgeWithCorrectClockPolarity();
     }
 }
